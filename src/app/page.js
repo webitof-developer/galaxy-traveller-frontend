@@ -1,65 +1,91 @@
-import Image from "next/image";
+import Hero from "@/components/home/Hero";
+import SearchBar from "@/components/home/SearchBar";
+import PopularDestinations from "@/components/home/PopularDestinations";
+import FeaturedTours from "@/components/home/FeaturedTours";
+import WhyChooseUs from "@/components/home/WhyChooseUs";
+import Testimonials from "@/components/home/Testimonials";
+import BlogSection from "@/components/home/BlogSection";
+import DetailSection from "@/components/home/DetailSection";
+import CTA from "@/components/common/CTA";
+import client from "@/api/client";
 
-export default function Home() {
+const API_BASE = (process.env.NEXT_PUBLIC_BASE_API || "").replace(/\/$/, "");
+
+async function getSiteData() {
+  console.log(`${process.env.NEXT_PUBLIC_BASE_API}/api/home`);
+  const res = await client.get(`/home`, {
+    next: { revalidate: 60 },
+  });
+
+  const data = res.data;
+  console.log(data);
+  if (res.status !== 200) throw new Error("Failed to load site data");
+  return data;
+}
+
+export async function generateMetadata() {
+  let title = "Galaxy Travel - Explore the World";
+  let description = "Find curated tours, destinations, and travel experiences.";
+  let shareImage = "/opengraph-home.jpg";
+
+  try {
+    const res = await fetch(`${API_BASE}/api/site_global`, { cache: "no-store" });
+    const data = await res.json();
+    const seo = data?.data?.defaultSeo || {};
+    title = seo.metaTitle || title;
+    description = seo.metaDescription || description;
+    shareImage = seo.shareImage || shareImage;
+  } catch (e) {
+    // fallback to defaults
+  }
+
+  return {
+    title,
+    description,
+    openGraph: {
+      title,
+      description,
+      images: [{ url: shareImage, width: 1200, height: 630 }],
+    },
+    twitter: {
+      card: "summary_large_image",
+      title,
+      description,
+      images: [shareImage],
+    },
+  };
+}
+
+export default async function HomePage() {
+  const { data, reviews } = await getSiteData();
+
+  console.log(data, reviews);
+
   return (
-    <div className="flex min-h-screen items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex min-h-screen w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.js file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
-        </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
-        </div>
-      </main>
+    <div className="p-0 m-0">
+      {data?.hero?.length > 0 && <Hero slides={data.hero} />}
+      <SearchBar />
+
+      <div className="mx-auto min-[1550px]:px-16">
+        {data?.destinations?.length > 0 && (
+          <PopularDestinations destinations={data.destinations} />
+        )}
+
+        <DetailSection />
+
+        {data?.tours?.length > 0 && <FeaturedTours tours={data.tours} />}
+
+        <WhyChooseUs />
+
+        {reviews?.length > 0 ||
+          (data.reviews?.length > 0 && (
+            <Testimonials reviews={reviews || data.reviews} />
+          ))}
+
+        {data?.blogs?.length > 0 && <BlogSection blogPosts={data.blogs} />}
+      </div>
+
+      <CTA />
     </div>
   );
 }

@@ -1,0 +1,165 @@
+import React, { useEffect, useState } from "react";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "../ui/dialog";
+import { Label } from "../ui/label";
+import { Button } from "../ui/button";
+import { RadioGroup, RadioGroupItem } from "../ui/radio-group";
+import { format } from "date-fns";
+
+export default function PaymentDialog({
+  showBookingModal,
+  setShowBookingModal,
+
+  /** REQUIRED PROPS */
+  tourName,
+  tourLocation,
+  dateRange,
+  guests,
+  amount, // FULL AMOUNT ALWAYS
+  fullLabel = "Full Payment",
+  paymentMode, // "full" or "partial" (initial mode)
+  paymentConfig,
+  onConfirmPayment,
+}) {
+  const { adults, children } = guests;
+  const totalGuests = adults + children;
+
+  const startDate = dateRange?.startDate;
+  const endDate = dateRange?.endDate;
+
+  const formatRs = (value = 0) =>
+    `Rs. ${Number(value || 0).toLocaleString("en-IN")}`;
+
+  // FIX: fullAmount = raw full amount
+  const fullAmount = Number(amount || 0);
+
+  // Allow parent to pass absolute partial total, otherwise fall back to per-guest price
+  const partialTotalOverride = Number(paymentConfig?.partial?.totalAmount || 0);
+
+  // FIX: partial uses configured price * guests (unless override provided)
+  const partialAmount = paymentConfig?.partial?.enabled
+    ? partialTotalOverride > 0
+      ? partialTotalOverride
+      : Number(paymentConfig.partial.price || 0) * totalGuests
+    : fullAmount;
+
+  // FIX: Always default to FULL unless partial is allowed & parent explicitly asked partial
+  const [selectedPayment, setSelectedPayment] = useState("full");
+
+  useEffect(() => {
+    if (paymentMode === "partial" && paymentConfig?.partial?.enabled) {
+      setSelectedPayment("partial");
+    } else {
+      setSelectedPayment("full");
+    }
+  }, [paymentMode, paymentConfig]);
+
+  // FIX: final amount must always compute using correct full / partial logic
+  const finalPayable =
+    selectedPayment === "partial" && paymentConfig?.partial?.enabled
+      ? partialAmount
+      : fullAmount;
+
+  const handlePayment = async () => {
+    // CLOSE payment dialog immediately
+    setShowBookingModal(false);
+
+    // Notify parent to start blocking overlay + API
+    onConfirmPayment({
+      tourName,
+      tourLocation,
+      startDate,
+      endDate,
+      guests,
+      selectedPayment,
+      finalPayable,
+    });
+  };
+
+  return (
+    <Dialog open={showBookingModal} onOpenChange={setShowBookingModal}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle className="text-lg font-semibold">
+            Confirm Your Booking
+          </DialogTitle>
+          <DialogDescription>
+            Review your trip details before proceeding to payment.
+          </DialogDescription>
+        </DialogHeader>
+
+        {/* Trip Summary */}
+        <div className="space-y-2 text-sm mb-4">
+          <div className="flex justify-between">
+            <span>Tour:</span>
+            <span className="font-medium">{tourName}</span>
+          </div>
+
+          {tourLocation && (
+            <div className="flex justify-between">
+              <span>Location:</span>
+              <span className="font-medium">{tourLocation}</span>
+            </div>
+          )}
+
+          {startDate && endDate && (
+            <div className="flex justify-between">
+              <span>Dates:</span>
+              <span className="font-medium">
+                {format(startDate, "MMM d")} - {format(endDate, "MMM d, yyyy")}
+              </span>
+            </div>
+          )}
+
+          <div className="flex justify-between">
+            <span>Guests:</span>
+            <span className="font-medium">
+              {adults} adults
+              {children > 0 && `, ${children} children`}
+            </span>
+          </div>
+        </div>
+
+        {/* Payment Options */}
+        {(paymentConfig.full.enabled || paymentConfig.partial.enabled) && (
+          <div className="space-y-3 my-3">
+            <Label className="font-medium">Payment Method</Label>
+
+            <RadioGroup
+              value={selectedPayment}
+              onValueChange={setSelectedPayment}
+            >
+              {/* FULL PAYMENT ALWAYS AVAILABLE */}
+
+              <div className="flex items-center gap-2 border p-3 rounded">
+                <RadioGroupItem value="full" id="full" />
+                <Label htmlFor="full">
+                  {fullLabel} – {formatRs(fullAmount)}
+                </Label>
+              </div>
+
+              {/* PARTIAL ONLY IF ENABLED */}
+              {paymentConfig.partial.enabled && (
+                <div className="flex items-center gap-2 border p-3 rounded">
+                  <RadioGroupItem value="partial" id="partial" />
+                  <Label htmlFor="partial">
+                    Partial Payment – {formatRs(partialAmount)}
+                  </Label>
+                </div>
+              )}
+            </RadioGroup>
+          </div>
+        )}
+
+        <Button onClick={handlePayment} className="w-full h-12 mt-4">
+          Pay {formatRs(finalPayable)}
+        </Button>
+      </DialogContent>
+    </Dialog>
+  );
+}
